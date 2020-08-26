@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	if len(os.Args) <= 2 {
+	if len(os.Args) == 1 {
 		createCommand("svn", "help").Run()
 		fmt.Print("\n\n")
 		fmt.Println("ezvn extension commands:")
@@ -42,7 +42,7 @@ func main() {
 			panic(executeError)
 		}
 	} else {
-		svnRedirectCommand := createCommand("svn", os.Args[2:]...)
+		svnRedirectCommand := createCommand("svn", os.Args[1:]...)
 		svnRedirectCommand.Run()
 	}
 }
