@@ -16,6 +16,7 @@ func main() {
 		fmt.Print("\n\n")
 		fmt.Println("ezvn extension commands:")
 		fmt.Println("\tundo (uncommit) - removes changes made in a revision or range of revisions. Expects comma separated numbers or ranges in format of FROM:TO")
+		fmt.Println("\tpurge - removes all local changes including untracked files")
 		return
 	}
 
@@ -41,6 +42,11 @@ func main() {
 		if executeError != nil {
 			panic(executeError)
 		}
+	} else if strings.EqualFold("purge", firstArg) {
+		//Revert all changes excluding untracked files.
+		createCommand("svn", "revert", "--recursive", ".").Run()
+		//Remove untracked files
+		createCommand("svn", "cleanup", ".", "--remove-unversioned").Run()
 	} else {
 		svnRedirectCommand := createCommand("svn", os.Args[1:]...)
 		svnRedirectCommand.Run()
