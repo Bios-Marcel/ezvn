@@ -10,17 +10,29 @@ import (
 	"strings"
 )
 
+//Uses spaces for indentation, just like svn, since tabs have variable size.
+//Just like svn, we list the name of each command as the first word, followed
+//by, if available, the aliases in curved braces separated by commas.
+const mainHelpPageExtension = `
+
+ezvn extension commands:
+    undo (uncommit) - removes changes made in a revision or range of revisions. Expects comma separated numbers or ranges in format of FROM:TO
+    purge - removes all local changes including untracked files`
+
 func main() {
+	//Just the executable name, e.g. `ezvn(.exe)` or `./ezvn(.exe)`
 	if len(os.Args) == 1 {
-		createCommand("svn", "help").Run()
-		fmt.Print("\n\n")
-		fmt.Println("ezvn extension commands:")
-		fmt.Println("\tundo (uncommit) - removes changes made in a revision or range of revisions. Expects comma separated numbers or ranges in format of FROM:TO")
-		fmt.Println("\tpurge - removes all local changes including untracked files")
+		//Print original svn help, since ezvn also allows using all svn commands.
+		showMainHelpPage()
 		return
 	}
 
 	firstArg := os.Args[1]
+	if len(os.Args) == 2 && strings.EqualFold("help", firstArg) {
+		showMainHelpPage()
+		return
+	}
+
 	if strings.EqualFold("undo", firstArg) || strings.EqualFold("uncommit", firstArg) {
 		if len(os.Args) <= 2 {
 			panic("not enough arguments")
@@ -48,9 +60,15 @@ func main() {
 		//Remove untracked files
 		createCommand("svn", "cleanup", ".", "--remove-unversioned").Run()
 	} else {
+		//If a subcommand is unknown, we show redirect to svn instead, as it could be an original command.
 		svnRedirectCommand := createCommand("svn", os.Args[1:]...)
 		svnRedirectCommand.Run()
 	}
+}
+
+func showMainHelpPage() {
+	createCommand("svn", "help").Run()
+	fmt.Print(mainHelpPageExtension)
 }
 
 func parseRevisionsArgument(revisions []string) (string, error) {
