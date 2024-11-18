@@ -2,17 +2,22 @@ package main
 
 import (
 	"bytes"
+	"encoding/xml"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/transform"
 )
 
-//Uses spaces for indentation, just like svn, since tabs have variable size.
-//Just like svn, we list the name of each command as the first word, followed
-//by, if available, the aliases in curved braces separated by commas.
+// Uses spaces for indentation, just like svn, since tabs have variable size.
+// Just like svn, we list the name of each command as the first word, followed
+// by, if available, the aliases in curved braces separated by commas.
 const mainHelpPageExtension = `
 
 ezvn extension commands:
@@ -20,9 +25,9 @@ ezvn extension commands:
     purge - removes all local changes including untracked files`
 
 func main() {
-	//Just the executable name, e.g. `ezvn(.exe)` or `./ezvn(.exe)`
+	// Just the executable name, e.g. `ezvn(.exe)` or `./ezvn(.exe)`
 	if len(os.Args) == 1 {
-		//Print original svn help, since ezvn also allows using all svn commands.
+		// Print original svn help, since ezvn also allows using all svn commands.
 		showMainHelpPage()
 		return
 	}
@@ -33,7 +38,51 @@ func main() {
 		return
 	}
 
-	if strings.EqualFold("undo", firstArg) || strings.EqualFold("uncommit", firstArg) {
+	if strings.EqualFold("changelist", firstArg) || strings.EqualFold("changelists", firstArg) {
+		status, err := getStatus()
+		if err != nil {
+			fmt.Printf("Error determining changelists:\n\t%s\n", err)
+			os.Exit(1)
+		}
+
+		if len(os.Args) >= 3 {
+			switch os.Args[2] {
+			case "add":
+			case "remove", "rm", "del", "delete":
+			case "--remove":
+				toRemove := strings.ToLower(os.Args[3])
+				for _, changelist := range status.Changelists {
+					// FIXME Add proper fuzzy matching
+					if strings.HasPrefix(strings.ToLower(changelist.Name), toRemove) {
+						var filesAsArgs []string
+						for _, file := range changelist.Files {
+							filesAsArgs = append(filesAsArgs, file.Path)
+						}
+						argFile, err := createArgFile(filesAsArgs)
+						if err != nil {
+							fmt.Printf("error creating argfile: %s", err)
+							os.Exit(1)
+						}
+						defer os.Remove(argFile)
+
+						args := []string{"changelist", "--remove", "--targets", argFile}
+						if err := createCommand("svn", args...).Run(); err != nil {
+							fmt.Printf("error removing changelist: %s", err)
+							os.Exit(1)
+						}
+						break
+					}
+				}
+			}
+		}
+
+		for _, changelist := range status.Changelists {
+			fmt.Println(changelist.Name)
+			for _, file := range changelist.Files {
+				fmt.Printf("\t%s\n", file.Path)
+			}
+		}
+	} else if strings.EqualFold("undo", firstArg) || strings.EqualFold("uncommit", firstArg) {
 		if len(os.Args) <= 2 {
 			panic("not enough arguments")
 		}
@@ -55,20 +104,85 @@ func main() {
 			panic(executeError)
 		}
 	} else if strings.EqualFold("purge", firstArg) {
-		//Revert all changes excluding untracked files.
+		// Revert all changes excluding untracked files.
 		createCommand("svn", "revert", "--recursive", ".").Run()
-		//Remove untracked files
+		// Remove untracked files
 		createCommand("svn", "cleanup", ".", "--remove-unversioned").Run()
 	} else {
-		//If a subcommand is unknown, we show redirect to svn instead, as it could be an original command.
+		// If a subcommand is unknown, we show redirect to svn instead, as it could be an original command.
 		svnRedirectCommand := createCommand("svn", os.Args[1:]...)
 		svnRedirectCommand.Run()
 	}
 }
 
+func createArgFile(args []string) (string, error) {
+	tempDir := os.TempDir()
+	argFile, err := os.CreateTemp(tempDir, "svn_changelist_*.args")
+	if err != nil {
+		return "", fmt.Errorf("Error creating tempfile: %w", err)
+	}
+	defer argFile.Close()
+
+	shittyEncodingWriter := transform.NewWriter(argFile, charmap.Windows1250.NewEncoder())
+	defer shittyEncodingWriter.Close()
+	for _, arg := range args {
+		if _, err := io.WriteString(shittyEncodingWriter, arg+"\n"); err != nil {
+			return "", fmt.Errorf("error writing to arg file: %w", err)
+		}
+	}
+
+	return argFile.Name(), nil
+}
+
 func showMainHelpPage() {
 	createCommand("svn", "help").Run()
 	fmt.Print(mainHelpPageExtension)
+}
+
+type ChangedFile struct {
+	Path string `xml:"path,attr"`
+}
+
+type Changelist struct {
+	Name  string        `xml:"name,attr"`
+	Files []ChangedFile `xml:"entry"`
+}
+
+type SVNStatus struct {
+	Changelists []Changelist `xml:"changelist"`
+}
+
+func getStatus() (*SVNStatus, error) {
+	statusCommand := exec.Command("svn", "status", "--xml")
+	statusCommand.Stderr = os.Stderr
+	statusCommand.Stdin = os.Stdin
+	outPipe, err := statusCommand.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("error getting status out pipe: %w", err)
+	}
+	defer outPipe.Close()
+
+	if err := statusCommand.Start(); err != nil {
+		return nil, fmt.Errorf("error starting status command: %w", err)
+	}
+	xmlDecoder := xml.NewDecoder(outPipe)
+	var status SVNStatus
+	if err := xmlDecoder.Decode(&status); err != nil {
+		return nil, fmt.Errorf("error decoding xml: %w", err)
+	}
+	// changelistRegex := regexp.MustCompile("^---.*?'(.+?)':$")
+	// status := SVNStatus{}
+	// scanner := bufio.NewScanner(transform.NewReader(outPipe, charmap.Windows1252.NewDecoder()))
+	// for scanner.Scan() {
+	// 	line := scanner.Text()
+	// 	if strings.HasPrefix(line, "---") {
+	// 		subMatches := changelistRegex.FindStringSubmatch(line)
+	// 		status.Changelists = append(status.Changelists, Changelist{Name: subMatches[1]})
+	// 	}
+	// }
+	//
+
+	return &status, nil
 }
 
 func parseRevisionsArgument(revisions []string) (string, error) {
