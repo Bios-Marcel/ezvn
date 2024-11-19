@@ -2,16 +2,25 @@
 
 A wrapper around svn to simplify some stuff.
 
-## Build
+## Installation
 
-To build you have to install the go language (golang), open a terminal, `cd` into the source directory and run:
+Running this will install `ezvn.exe` into `~/go/bin`.
+```
+go install github.com/Bios-Marcel/ezvn@latest
+```
+
+Either add `~/go/bin` to your `PATH` environment variable or move the binary
+to a different path.
+
+## Autocompletion
+
+Powershell:
 
 ```
-go build .
+ezvn completion powershell | Out-String | Invoke-Expression
 ```
-
-This produces a binary called either `ezvn` or `ezvn.exe`. Put it into whatever path you desire and add the path to your systems `PATH` environment variable.
 
 ## Usage
 
-After adding svn to the systems `PATH` environment variable, run `ezvn` to see the help output.
+Use it like you would SVN. Any unknown commands will be delegated.
+

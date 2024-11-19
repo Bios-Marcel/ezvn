@@ -1,0 +1,37 @@
+name: build
+
+on:
+  push:
+    tags: [v**]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.23.x
+
+      - name: Run tests
+        shell: bash
+        run: |
+          go test -v -race -covermode=atomic ./...
+
+      - name: Build artifact
+        shell: bash
+        # We try to make the build as reproducible as possible. We even omit
+        # versioning information, as this should be available via the manifest
+        # either way.
+        run: |
+          go build -buildvcs=false -trimpath -ldflags "-w -s -buildid=" -o ezvn.exe ./cmd
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ezvn.exe
+          path: ezvn.exe
+
