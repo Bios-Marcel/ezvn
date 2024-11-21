@@ -19,6 +19,8 @@ func NewChangelist() *cobra.Command {
 		Aliases: []string{"track"},
 		// Name of the changelist to add to and at least one file to be added.
 		Args: cobra.MinimumNArgs(2),
+		// Disabled til we have a proper impl
+		DisableFlagParsing: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Delegating to svn ...")
 			redirectCmd := createCommand("svn", append([]string{"changelist"}, args...)...)
@@ -30,6 +32,8 @@ func NewChangelist() *cobra.Command {
 		Aliases: []string{"untrack"},
 		// At least one file should be removed
 		Args: cobra.MinimumNArgs(1),
+		// Disabled til we have a proper impl
+		DisableFlagParsing: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Delegating to svn ...")
 			redirectCmd := createCommand("svn", append([]string{"changelist", "--remove"}, args...)...)
