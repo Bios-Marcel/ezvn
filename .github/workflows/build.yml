@@ -27,7 +27,7 @@ jobs:
         # versioning information, as this should be available via the manifest
         # either way.
         run: |
-          go build -buildvcs=false -trimpath -ldflags "-w -s -buildid=" -o ezvn.exe ./cmd
+          go build -buildvcs=false -trimpath -ldflags "-w -s -buildid=" -o ezvn.exe .
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
